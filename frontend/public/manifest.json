@@ -1,0 +1,16 @@
+{
+  "short_name": "Gesti-Fact",
+  "name": "Gesti-Fact — Gestion de factures",
+  "description": "Créez, gérez et exportez vos factures professionnelles en PDF.",
+  "lang": "fr",
+  "icons": [
+    { "src": "logo192.png", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "logo512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1F3A5F",
+  "background_color": "#F4F6F9"
+}
