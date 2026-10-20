@@ -2,7 +2,9 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,9 +19,19 @@ def env_list(name, default=""):
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
 
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-change-me-0123456789-abcdefghijklmnop")
-DEBUG = env_bool("DJANGO_DEBUG", True)
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,*")
+ON_VERCEL = bool(os.getenv("VERCEL"))
+DEV_SECRET_KEY = "dev-insecure-change-me-0123456789-abcdefghijklmnop"
+
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEV_SECRET_KEY)
+DEBUG = env_bool("DJANGO_DEBUG", not ON_VERCEL)
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", ".vercel.app" if ON_VERCEL else "localhost,127.0.0.1,0.0.0.0,*")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "https://*.vercel.app")
+
+if not DEBUG and SECRET_KEY == DEV_SECRET_KEY:
+    raise ImproperlyConfigured("Définissez DJANGO_SECRET_KEY dans les variables d'environnement de production.")
+
+if ON_VERCEL:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -65,8 +77,25 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# Base de données : PostgreSQL (USE_SQLITE=1 uniquement pour des tests rapides)
-if env_bool("USE_SQLITE"):
+# Base de données PostgreSQL :
+# - DATABASE_URL (Neon / Vercel) en production
+# - variables POSTGRES_* du fichier .env en local
+# - USE_SQLITE=1 uniquement pour des tests rapides
+if os.getenv("DATABASE_URL"):
+    url = urlparse(os.environ["DATABASE_URL"])
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": url.path.lstrip("/"),
+            "USER": unquote(url.username or ""),
+            "PASSWORD": unquote(url.password or ""),
+            "HOST": url.hostname,
+            "PORT": url.port or 5432,
+            "OPTIONS": {key: values[0] for key, values in parse_qs(url.query).items() if key == "sslmode"},
+            "CONN_MAX_AGE": 0,
+        }
+    }
+elif env_bool("USE_SQLITE"):
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -79,7 +108,7 @@ else:
             "ENGINE": "django.db.backends.postgresql",
             "NAME": os.getenv("POSTGRES_DB", "gestifact"),
             "USER": os.getenv("POSTGRES_USER", "postgres"),
-            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "Diakis7261"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
             "HOST": os.getenv("POSTGRES_HOST", "localhost"),
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
         }

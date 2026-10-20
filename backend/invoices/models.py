@@ -1,10 +1,11 @@
+import base64
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
 
-from .utils import amount_in_words
+from .utils import amount_in_words, compress_image
 
 TWO_PLACES = Decimal("0.01")
 
@@ -14,6 +15,7 @@ def money(value):
 
 
 def company_upload_path(instance, filename):
+    """Conservé pour la migration 0001 (les images sont désormais stockées en base)."""
     return f"company/{instance.owner_id}/{filename}"
 
 
@@ -29,8 +31,11 @@ class Company(models.Model):
     website = models.CharField(max_length=200, blank=True)
     legal_ids = models.CharField("RCCM / NCC / IFU", max_length=300, blank=True)
     bank_details = models.CharField("coordonnées bancaires", max_length=300, blank=True)
-    logo = models.ImageField(upload_to=company_upload_path, blank=True, null=True)
-    signature = models.ImageField(upload_to=company_upload_path, blank=True, null=True)
+    # Images stockées en base : l'hébergement serverless (Vercel) n'a pas de disque persistant
+    logo_data = models.BinaryField(null=True, blank=True, editable=False)
+    logo_mime = models.CharField(max_length=30, blank=True, editable=False)
+    signature_data = models.BinaryField(null=True, blank=True, editable=False)
+    signature_mime = models.CharField(max_length=30, blank=True, editable=False)
     signatory_name = models.CharField("nom du signataire", max_length=150, blank=True)
     signatory_title = models.CharField("titre du signataire", max_length=150, default="La Direction")
     currency_code = models.CharField("symbole monétaire", max_length=10, default="FCFA")
@@ -40,11 +45,33 @@ class Company(models.Model):
     footer_note = models.CharField("mention de bas de page", max_length=300, blank=True)
     primary_color = models.CharField("couleur principale", max_length=7, default="#1F3A5F")
 
+    IMAGE_FIELDS = ("logo", "signature")
+
     class Meta:
         verbose_name = "entreprise"
 
     def __str__(self):
         return self.name
+
+    def image_bytes(self, field):
+        data = getattr(self, f"{field}_data")
+        return bytes(data) if data else None
+
+    def image_data_url(self, field):
+        data = self.image_bytes(field)
+        if not data:
+            return None
+        mime = getattr(self, f"{field}_mime") or "image/png"
+        return f"data:{mime};base64,{base64.b64encode(data).decode()}"
+
+    def set_image(self, field, upload):
+        """Enregistre (ou efface si None) une image envoyée, redimensionnée et compressée."""
+        if upload is None:
+            data, mime = None, ""
+        else:
+            data, mime = compress_image(upload)
+        setattr(self, f"{field}_data", data)
+        setattr(self, f"{field}_mime", mime)
 
 
 class Client(models.Model):

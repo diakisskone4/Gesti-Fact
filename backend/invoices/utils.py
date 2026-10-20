@@ -1,6 +1,20 @@
 from decimal import ROUND_HALF_UP, Decimal
+from io import BytesIO
 
 from num2words import num2words
+from PIL import Image
+
+MAX_IMAGE_SIZE = (900, 450)
+
+
+def compress_image(upload):
+    """Redimensionne une image (logo / signature) et la convertit en PNG optimisé."""
+    image = Image.open(upload)
+    image = image.convert("RGBA")
+    image.thumbnail(MAX_IMAGE_SIZE)
+    buffer = BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue(), "image/png"
 
 
 def amount_in_words(amount, currency_name="francs CFA"):

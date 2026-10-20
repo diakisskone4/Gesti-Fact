@@ -5,9 +5,25 @@ from .models import Client, Company, Invoice, InvoiceItem
 
 
 class CompanySerializer(serializers.ModelSerializer):
+    # Envoi : fichier image (multipart). Lecture : data URL base64 (voir to_representation)
+    logo = serializers.ImageField(required=False, allow_null=True, write_only=True)
+    signature = serializers.ImageField(required=False, allow_null=True, write_only=True)
+
     class Meta:
         model = Company
-        exclude = ["owner"]
+        exclude = ["owner", "logo_data", "logo_mime", "signature_data", "signature_mime"]
+
+    def update(self, instance, validated_data):
+        for field in Company.IMAGE_FIELDS:
+            if field in validated_data:
+                instance.set_image(field, validated_data.pop(field))
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        for field in Company.IMAGE_FIELDS:
+            data[field] = instance.image_data_url(field)
+        return data
 
     def to_internal_value(self, data):
         # En multipart, envoyer "" efface le logo / la signature

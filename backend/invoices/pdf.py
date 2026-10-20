@@ -35,17 +35,16 @@ def _esc(text):
     return (str(text or "")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _image(field, max_w, max_h):
-    """Retourne un flowable Image redimensionné en conservant les proportions, ou None."""
-    if not field:
+def _image(data, max_w, max_h):
+    """Retourne un flowable Image (depuis des octets) redimensionné en conservant les proportions, ou None."""
+    if not data:
         return None
     try:
-        path = field.path
-        width, height = ImageReader(path).getSize()
+        width, height = ImageReader(BytesIO(data)).getSize()
     except Exception:
         return None
     ratio = min(max_w / width, max_h / height)
-    img = Image(path, width=width * ratio, height=height * ratio)
+    img = Image(BytesIO(data), width=width * ratio, height=height * ratio)
     img.hAlign = "LEFT"
     return img
 
@@ -79,7 +78,7 @@ def _styles(primary):
 
 def _header(invoice, company, st):
     left = []
-    logo = _image(company.logo, 55 * mm, 24 * mm)
+    logo = _image(company.image_bytes("logo"), 55 * mm, 24 * mm)
     if logo:
         left += [logo, Spacer(1, 3 * mm)]
     left.append(Paragraph(_esc(company.name), st["company"]))
@@ -235,7 +234,7 @@ def _words(invoice, st, primary):
 
 def _signature(company, st):
     block = [Paragraph(_esc(company.signatory_title or "La Direction"), st["sign"]), Spacer(1, 2 * mm)]
-    sig = _image(company.signature, 45 * mm, 20 * mm)
+    sig = _image(company.image_bytes("signature"), 45 * mm, 20 * mm)
     if sig:
         sig.hAlign = "CENTER"
         block.append(sig)
